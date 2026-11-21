@@ -33,7 +33,7 @@ Open it from the home-screen icon from then on.
 
 - **Add (home):** type the amount (your share only), pick a category, and tap **Save spend**. Below the form you see this month's spending by category with limit balances, and your last few days of entries.
 - **Month / Year:** switch between the two at the top. Use the arrows to move between months or years. Tap an entry to edit or delete it. Tap a month bar in Year view to open that month.
-- **Backup:** export, import, categories, monthly limits, and currency.
+- **Backup:** appearance (**Auto** follows your phone's light or dark mode, or pick **Light** or **Dark**), export, import, categories, monthly limits, and currency.
 
 ### Monthly limits
 
@@ -59,7 +59,7 @@ Data belongs to the exact address you open the app from. If you change the link 
 
 When you change any file:
 
-1. Open `sw.js` and raise the version number on the `CACHE` line, for example `spendlog-v7` to `spendlog-v8`.
+1. Open `sw.js` and raise the version number on the `CACHE` line, for example `spendlog-v8` to `spendlog-v9`.
 2. Upload all changed files to GitHub.
 3. On your phone, open the app, close it fully, and open it again to load the new version.
 
