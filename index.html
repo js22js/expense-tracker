@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Spend Log</title>
-<meta name="theme-color" content="#f5f3f8">
+<meta name="theme-color" content="#f5f3f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f0d13" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -25,6 +26,17 @@
   color-scheme:light;
   --sans:"Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
+/* Dark theme: Auto follows the phone; Light or Dark in Backup forces one (data-theme on <html>). */
+@media (prefers-color-scheme: dark){ :root:not([data-theme=light]){
+  --bg:#0f0d13; --surface:#18151e; --raised:#221e2a; --line:#2c2735; --ink:#f2eff7; --muted:#9a93a6;
+  --accent:#a78bfa; --act:#f2eff7; --act-ink:#141217; --soft:#241c36;
+  --hero-bg:#1f1830; --nav-bg:rgba(34,30,42,.94); --nav-on:#141217; --nav-on-bg:#f2eff7;
+  --danger:#f0627f; --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark; } }
+:root[data-theme=dark]{
+  --bg:#0f0d13; --surface:#18151e; --raised:#221e2a; --line:#2c2735; --ink:#f2eff7; --muted:#9a93a6;
+  --accent:#a78bfa; --act:#f2eff7; --act-ink:#141217; --soft:#241c36;
+  --hero-bg:#1f1830; --nav-bg:rgba(34,30,42,.94); --nav-on:#141217; --nav-on-bg:#f2eff7;
+  --danger:#f0627f; --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark; }
 *{box-sizing:border-box}
 html,body{height:100%}
 html{background:var(--bg)}
@@ -235,7 +247,7 @@ function monthName(ym){ var p = ym.split('-'); return new Date(+p[0], +p[1]-1, 1
 function dayName(d){ var p = d.split('-'); return new Date(+p[0], +p[1]-1, +p[2]).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }
 
 function fresh(){
-  return { version:1, currency:'RM', lastExport:null,
+  return { version:1, currency:'RM', lastExport:null, theme:'auto',
     categories: DEFAULT_CATS.map(function(n,i){ return {id:n.toLowerCase(), name:n, color:PALETTE[i === 6 ? 7 : i]}; }),
     entries: [] };
 }
@@ -244,6 +256,7 @@ function clean(d){
   var out = fresh();
   if(typeof d.currency === 'string' && d.currency.trim()) out.currency = d.currency.trim().slice(0,6);
   if(typeof d.lastExport === 'string') out.lastExport = d.lastExport;
+  if(d.theme === 'light' || d.theme === 'dark') out.theme = d.theme;
   if(Array.isArray(d.categories)){
     var cats = d.categories.filter(function(c){ return c && typeof c.id === 'string' && typeof c.name === 'string' && c.name.trim(); })
       .map(function(c,i){ return {id:c.id, name:c.name.trim().slice(0,24), color:/^#[0-9a-f]{6}$/i.test(c.color||'') ? c.color : PALETTE[i % PALETTE.length], limit:(Number.isInteger(c.limit) && c.limit > 0) ? c.limit : null}; });
@@ -267,6 +280,16 @@ function save(){
 }
 
 var state = load();
+var themeSet = false;
+function applyTheme(){
+  var root = document.documentElement;
+  if(state.theme === 'light' || state.theme === 'dark'){ root.setAttribute('data-theme', state.theme); themeSet = true; }
+  else if(themeSet){ root.removeAttribute('data-theme'); themeSet = false; }
+  var dark = state.theme === 'dark' || (state.theme !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){ m.setAttribute('content', dark ? '#0f0d13' : '#f5f3f8'); });
+}
+applyTheme();
+if(window.matchMedia){ try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); }catch(e){} }
 var tab = 'add';
 var cursor = today().slice(0,7);
 var year = +today().slice(0,4);
@@ -426,7 +449,11 @@ function viewYear(){
 
 function viewSettings(){
   var last = state.lastExport ? new Date(state.lastExport).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : 'never';
+  var looks = [['auto','Auto'],['light','Light'],['dark','Dark']];
   return '<h1>Backup</h1>' +
+    '<div class="card"><h2>Appearance</h2><div class="seg" role="radiogroup" aria-label="Theme">' + looks.map(function(l){
+      return '<button type="button" role="radio" data-look="' + l[0] + '" aria-checked="' + (state.theme === l[0]) + '" aria-selected="' + (state.theme === l[0]) + '">' + l[1] + '</button>';
+    }).join('') + '</div><div class="small muted">' + (state.theme === 'auto' ? 'Auto follows your phone: dark when your phone is in dark mode.' : 'Always ' + state.theme + ', whatever your phone is set to.') + '</div></div>' +
     '<div class="card"><h2>Backup</h2><div class="small muted">' + state.entries.length + ' entries are stored only on this device. Last backup: ' + esc(last) + '.</div>' +
       '<button class="btn primary block" type="button" data-act="exportJson">Export backup (JSON)</button>' +
       '<div class="btns"><button class="btn" type="button" data-act="exportCsv">Export CSV</button>' +
@@ -466,7 +493,7 @@ function download(blob, name){
   setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
 }
 function exportJson(){
-  var out = { app:'spendlog', version:1, exportedAt:new Date().toISOString(), currency:state.currency, categories:state.categories, entries:state.entries };
+  var out = { app:'spendlog', version:1, exportedAt:new Date().toISOString(), theme:state.theme, currency:state.currency, categories:state.categories, entries:state.entries };
   deliver('spendlog-backup-' + stamp() + '.json', JSON.stringify(out, null, 1), 'application/json');
 }
 function exportCsv(){
@@ -490,7 +517,7 @@ function importFile(file){
       d.categories.forEach(function(c){ if(!ids[c.id]) state.categories.push(c); });
       state.entries = state.entries.concat(fresh_); save(); render(); toast('Added ' + fresh_.length + ' entries');
     };
-    var replace = function(){ var le = state.lastExport; state = d; state.lastExport = le; form.cat = state.categories[0].id; save(); render(); toast('Restored ' + d.entries.length + ' entries'); };
+    var replace = function(){ var le = state.lastExport; state = d; state.lastExport = le; applyTheme(); form.cat = state.categories[0].id; save(); render(); toast('Restored ' + d.entries.length + ' entries'); };
     var btns = [{label:'Cancel'}];
     if(state.entries.length) btns.push({label:'Replace all', cls:'danger', run:replace});
     btns.push({label: state.entries.length ? 'Add new ones' : 'Import', cls:'primary', run: state.entries.length ? merge : replace});
@@ -578,6 +605,7 @@ $('view').addEventListener('click', function(ev){
     cursor = d.getFullYear() + '-' + pad(d.getMonth()+1); render();
   }
   else if(t.dataset.view){ if(t.dataset.view === 'month'){ if(String(year) !== cursor.slice(0,4)) cursor = year === +today().slice(0,4) ? today().slice(0,7) : year + '-12'; tab = 'month'; } else { year = +cursor.slice(0,4); tab = 'year'; } render(); }
+  else if(t.dataset.look){ state.theme = t.dataset.look; save(); applyTheme(); render(); }
   else if(t.dataset.yshift){ year += +t.dataset.yshift; render(); }
   else if(t.dataset.year){ year = +t.dataset.year; tab = 'year'; render(); }
   else if(t.dataset.edit) openEdit(t.dataset.edit);
@@ -597,7 +625,7 @@ $('view').addEventListener('click', function(ev){
   else if(t.dataset.act === 'exportCsv') exportCsv();
   else if(t.dataset.act === 'erase'){
     ask('Erase everything?', 'This deletes all ' + state.entries.length + ' entries from this device. Export a backup first if you want to keep them.',
-      [{label:'Cancel'},{label:'Erase', cls:'danger', run:function(){ state = fresh(); form.cat = state.categories[0].id; save(); render(); toast('All data erased'); }}]);
+      [{label:'Cancel'},{label:'Erase', cls:'danger', run:function(){ state = fresh(); applyTheme(); form.cat = state.categories[0].id; save(); render(); toast('All data erased'); }}]);
   }
 });
 

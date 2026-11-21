@@ -1,5 +1,5 @@
 // Spend Log offline cache. Bump CACHE when you change any file so phones pick up the new version.
-const CACHE = 'spendlog-v7';
+const CACHE = 'spendlog-v8';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
