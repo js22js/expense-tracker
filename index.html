@@ -72,6 +72,20 @@ h2{font-size:11px;font-weight:600;margin:0;color:var(--muted);text-transform:upp
 .months button.now span{color:var(--hero-ink)}
 .months button:disabled{cursor:default}
 button.pill{background:none;font:inherit;font-size:12px;color:var(--hero-accent);cursor:pointer}
+.budget{display:flex;flex-direction:column;gap:8px;margin-top:-6px}
+.bline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;color:var(--hero-muted)}
+.bline b{color:var(--hero-ink);font-weight:600;font-size:15px}
+.btrack{height:6px;border-radius:3px;background:var(--hero-bar);overflow:hidden}
+.btrack i{display:block;height:100%;border-radius:3px;background:var(--hero-accent)}
+.budget.over .bline b,.budget.over .bline span:first-child{color:#ff8aa1}
+.budget.over .btrack i{background:#ff8aa1}
+.budget-set{align-self:flex-start;margin-top:-8px;border:0;background:none;padding:0;font-size:13px;font-weight:600;color:var(--hero-accent);min-height:32px}
+.assign{display:flex;flex-direction:column;gap:6px}
+.assign .btrack{background:var(--raised)}
+.assign .btrack i{background:var(--accent)}
+.assign .bline{color:var(--muted)}
+.assign.over .btrack i{background:var(--danger)}
+.assign.over .bline span:last-child{color:var(--danger);font-weight:600}
 .hero .stats{border-top:1px solid var(--hero-line);padding-top:14px}
 .stats{display:flex;gap:10px}
 .stat{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;font-size:12px;color:var(--muted)}
@@ -247,7 +261,7 @@ function monthName(ym){ var p = ym.split('-'); return new Date(+p[0], +p[1]-1, 1
 function dayName(d){ var p = d.split('-'); return new Date(+p[0], +p[1]-1, +p[2]).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }
 
 function fresh(){
-  return { version:1, currency:'RM', lastExport:null, theme:'auto',
+  return { version:1, currency:'RM', lastExport:null, theme:'auto', budget:null,
     categories: DEFAULT_CATS.map(function(n,i){ return {id:n.toLowerCase(), name:n, color:PALETTE[i === 6 ? 7 : i]}; }),
     entries: [] };
 }
@@ -257,6 +271,7 @@ function clean(d){
   if(typeof d.currency === 'string' && d.currency.trim()) out.currency = d.currency.trim().slice(0,6);
   if(typeof d.lastExport === 'string') out.lastExport = d.lastExport;
   if(d.theme === 'light' || d.theme === 'dark') out.theme = d.theme;
+  if(Number.isInteger(d.budget) && d.budget > 0) out.budget = d.budget;
   if(Array.isArray(d.categories)){
     var cats = d.categories.filter(function(c){ return c && typeof c.id === 'string' && typeof c.name === 'string' && c.name.trim(); })
       .map(function(c,i){ return {id:c.id, name:c.name.trim().slice(0,24), color:/^#[0-9a-f]{6}$/i.test(c.color||'') ? c.color : PALETTE[i % PALETTE.length], limit:(Number.isInteger(c.limit) && c.limit > 0) ? c.limit : null}; });
@@ -353,6 +368,7 @@ function viewAdd(){
     week.push({v:v, l:dt.toLocaleDateString('en-GB',{weekday:'narrow'}), now:i === 0}); }
   return '<div class="hero"><div class="top"><span>Spent in ' + esc(monthName(ym)) + '</span><span class="pill num">' + m.length + (m.length === 1 ? ' entry' : ' entries') + '</span></div>' +
     '<div class="big num"><span class="cur">' + esc(state.currency) + '</span>' + money(sum(m)) + '</div>' +
+    budgetBlock(sum(m)) +
     '<div class="week" aria-hidden="true">' + week.map(function(w){ return '<div' + (w.now ? ' class="now"' : '') + '><i style="height:' + Math.round(w.v / mx * 100) + '%"></i><span>' + w.l + '</span></div>'; }).join('') + '</div>' +
     '<div class="stats"><div class="stat"><b class="num">' + cur(sum(d)) + '</b>today</div><div class="stat"><b class="num">' + cur(week.reduce(function(a,w){ return a + w.v; },0)) + '</b>last 7 days</div></div></div>' +
     backupNudge() +
@@ -367,6 +383,15 @@ function viewAdd(){
     (storageOk ? '' : '<div class="err">This browser is blocking storage, so entries will not be kept. Turn off private browsing.</div>') +
     catCard(m, sum(m), 'This month by category', true) +
     (m.length ? dayList(m, 3) + (Object.keys(m.reduce(function(a,e){ a[e.date] = 1; return a; }, {})).length > 3 ? '<button type="button" class="btn block" data-go="month">See all of ' + esc(monthName(ym)) + '</button>' : '') : '');
+}
+
+function limitsSum(skipId){ return state.categories.reduce(function(a,c){ return a + (c.id !== skipId && c.limit ? c.limit : 0); }, 0); }
+function overBudgetMsg(total){ return 'Category limits would add up to ' + state.currency + ' ' + money(total) + ', more than your ' + state.currency + ' ' + money(state.budget) + ' budget. Lower a limit or raise the budget.'; }
+function budgetBlock(spent){
+  if(!state.budget) return '<button type="button" class="budget-set" data-go="settings">Set a monthly budget</button>';
+  var left = state.budget - spent, over = left < 0;
+  return '<div class="budget' + (over ? ' over' : '') + '"><div class="bline"><span><b class="num">' + cur(Math.abs(left)) + '</b> ' + (over ? 'over budget' : 'left') + '</span><span class="num">of ' + cur(state.budget) + '</span></div>' +
+    '<div class="btrack"><i style="width:' + Math.min(100, spent / state.budget * 100) + '%"></i></div></div>';
 }
 
 function catCard(list, total, title, limits){
@@ -458,6 +483,13 @@ function viewSettings(){
       '<button class="btn primary block" type="button" data-act="exportJson">Export backup (JSON)</button>' +
       '<div class="btns"><button class="btn" type="button" data-act="exportCsv">Export CSV</button>' +
       '<label class="btn filebtn">Import backup<input type="file" id="importFile" accept=".json,application/json"></label></div></div>' +
+    '<div class="card"><h2>Monthly budget</h2>' +
+      '<label class="field">Total you plan to spend each month, ' + esc(state.currency) + '<input id="budget" inputmode="decimal" placeholder="No budget" autocomplete="off" value="' + (state.budget ? (state.budget/100).toFixed(2) : '') + '"></label>' +
+      (state.budget ? (function(){ var a = limitsSum(), r = state.budget - a;
+        return '<div class="assign' + (r < 0 ? ' over' : '') + '"><div class="btrack"><i style="width:' + Math.min(100, a / state.budget * 100) + '%"></i></div>' +
+          '<div class="bline small"><span class="num">' + cur(a) + ' in category limits</span><span class="num">' + (r < 0 ? cur(-r) + ' over' : cur(r) + ' unassigned') + '</span></div></div>'; })()
+        : '<div class="small muted">Set a budget, then split it across the category limits below. The limits can add up to the budget but not more.</div>') +
+    '</div>' +
     '<div class="card"><h2>Categories</h2>' + state.categories.map(function(c){
         return '<div class="catrow">' + ico(c) + '<input data-rename="' + esc(c.id) + '" value="' + esc(c.name) + '" maxlength="24" aria-label="Category name">' +
           (c.id === 'other' ? '<span></span>' : '<button type="button" data-delcat="' + esc(c.id) + '">Remove</button>') +
@@ -493,7 +525,7 @@ function download(blob, name){
   setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
 }
 function exportJson(){
-  var out = { app:'spendlog', version:1, exportedAt:new Date().toISOString(), theme:state.theme, currency:state.currency, categories:state.categories, entries:state.entries };
+  var out = { app:'spendlog', version:1, exportedAt:new Date().toISOString(), theme:state.theme, budget:state.budget, currency:state.currency, categories:state.categories, entries:state.entries };
   deliver('spendlog-backup-' + stamp() + '.json', JSON.stringify(out, null, 1), 'application/json');
 }
 function exportCsv(){
@@ -570,6 +602,7 @@ $('view').addEventListener('submit', function(ev){
     var name = $('newCat').value.trim(); if(!name){ toast('Type a category name first'); return; }
     var lraw = $('newLimit').value.trim(), lim = lraw ? parseAmount(lraw) : null;
     if(lraw && lim === null){ toast('Limit must be an amount like 300 or 250.50'); return; }
+    if(lim && state.budget && limitsSum() + lim > state.budget){ ask('Over your budget', overBudgetMsg(limitsSum() + lim), [{label:'OK', cls:'primary'}]); return; }
     if(state.categories.some(function(c){ return c.name.toLowerCase() === name.toLowerCase(); })){ toast('That category already exists'); return; }
     var used = {}; state.categories.forEach(function(c){ used[c.color] = 1; });
     var color = PALETTE.filter(function(p){ return !used[p]; })[0] || PALETTE[state.categories.length % PALETTE.length];
@@ -587,12 +620,21 @@ $('view').addEventListener('change', function(ev){
     var c = cat(t.dataset.rename), n = t.value.trim();
     if(n) { c.name = n; save(); toast('Renamed'); } else t.value = c.name;
   }
+  else if(t.id === 'budget'){
+    var bv = t.value.trim();
+    if(!bv){ state.budget = null; save(); render(); toast('Monthly budget removed'); return; }
+    var ba = parseAmount(bv);
+    if(ba === null){ toast('Budget must be an amount like 2000 or 1850.50'); t.value = state.budget ? (state.budget/100).toFixed(2) : ''; return; }
+    if(ba < limitsSum()){ ask('Budget is too small', 'Your category limits already add up to ' + state.currency + ' ' + money(limitsSum()) + '. Set a budget of at least that, or lower some limits first.', [{label:'OK', cls:'primary'}]); t.value = state.budget ? (state.budget/100).toFixed(2) : ''; return; }
+    state.budget = ba; save(); render(); toast('Monthly budget set to ' + state.currency + ' ' + money(ba));
+  }
   else if(t.dataset.limit){
     var lc = cat(t.dataset.limit), lv = t.value.trim();
     if(!lv){ lc.limit = null; save(); toast(lc.name + ': no limit'); return; }
     var la = parseAmount(lv);
     if(la === null){ toast('Limit must be an amount like 300 or 250.50'); t.value = lc.limit ? (lc.limit/100).toFixed(2) : ''; return; }
-    lc.limit = la; t.value = (la/100).toFixed(2); save(); toast(lc.name + ' limit set to ' + state.currency + ' ' + money(la));
+    if(state.budget && limitsSum(lc.id) + la > state.budget){ ask('Over your budget', overBudgetMsg(limitsSum(lc.id) + la), [{label:'OK', cls:'primary'}]); t.value = lc.limit ? (lc.limit/100).toFixed(2) : ''; return; }
+    lc.limit = la; t.value = (la/100).toFixed(2); save(); render(); toast(lc.name + ' limit set to ' + state.currency + ' ' + money(la));
   }
   else if(t.id === 'currency'){ state.currency = t.value.trim() || 'RM'; save(); render(); }
 });
